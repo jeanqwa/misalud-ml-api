@@ -3,7 +3,7 @@ import joblib
 import numpy as np
 import os
 import json
-import tempfile
+import base64
 
 # 🔥 Firebase Admin SDK
 import firebase_admin
@@ -11,26 +11,23 @@ from firebase_admin import credentials, messaging
 
 app = Flask(__name__)
 
-# ✅ Cargar el modelo
+# ✅ Cargar modelo
 model = joblib.load("modelo_spo2_pulso.joblib")
 
-# ✅ Inicializar Firebase desde variable de entorno
+# ✅ Inicializar Firebase Admin usando variable de entorno codificada en base64
 if not firebase_admin._apps:
-    cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
-    if cred_json:
+    b64_json = os.environ.get("FIREBASE_CREDENTIALS_JSON_B64")
+    if b64_json:
         try:
-            # Escribir el contenido JSON en un archivo temporal
-            with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json") as tmp:
-                tmp.write(cred_json)
-                tmp_path = tmp.name
-
-            cred = credentials.Certificate(tmp_path)
+            decoded = base64.b64decode(b64_json).decode("utf-8")
+            cred_dict = json.loads(decoded)
+            cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
-            print("✅ Firebase inicializado correctamente")
+            print("✅ Firebase inicializado correctamente.")
         except Exception as e:
-            print("❌ Error al inicializar Firebase:", e)
+            print(f"❌ Error al inicializar Firebase: {e}")
     else:
-        print("⚠️ Variable de entorno FIREBASE_CREDENTIALS_JSON no definida.")
+        print("⚠️ Variable de entorno FIREBASE_CREDENTIALS_JSON_B64 no definida.")
 
 @app.route("/", methods=["GET"])
 def index():
@@ -48,7 +45,7 @@ def predict():
     features_np = np.array(features).reshape(1, -1)
     prediction = model.predict(features_np).tolist()
 
-    # ✅ Enviar notificación si hay anomalía
+    # ✅ Enviar notificación si hay anomalía y token está presente
     if prediction[0] == 0 and token:
         try:
             message = messaging.Message(
@@ -59,8 +56,8 @@ def predict():
                 token=token
             )
             response = messaging.send(message)
-            print("✅ Notificación enviada:", response)
+            print("✅ Notificación FCM enviada:", response)
         except Exception as e:
-            print("❌ Error al enviar notificación:", e)
+            print("❌ Error al enviar la notificación FCM:", e)
 
     return jsonify({"prediction": prediction})
