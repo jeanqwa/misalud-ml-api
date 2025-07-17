@@ -10,10 +10,10 @@ from firebase_admin import credentials, messaging
 
 app = Flask(__name__)
 
-# Cargar modelo
+# ✅ Cargar modelo
 model = joblib.load("modelo_spo2_pulso.joblib")
 
-# ✅ Inicializar Firebase Admin usando variable de entorno
+# ✅ Inicializar Firebase Admin desde variable de entorno segura
 if not firebase_admin._apps:
     cred_json = os.environ.get("FIREBASE_CREDENTIALS_JSON")
     if cred_json:
@@ -30,7 +30,7 @@ def index():
 def predict():
     data = request.get_json()
     features = data.get("features")
-    token = data.get("fcm_token")  # ⚠️ Esperamos también el token FCM
+    token = data.get("fcm_token")
 
     if not features:
         return jsonify({"error": "Faltan características 'features'"}), 400
@@ -38,7 +38,8 @@ def predict():
     features_np = np.array(features).reshape(1, -1)
     prediction = model.predict(features_np).tolist()
 
-    # ✅ Si es una anomalía, se envía una notificación push
+    # ✅ Enviar notificación si es anomalía
+    fcm_status = "no enviada"
     if prediction[0] == 0 and token:
         try:
             message = messaging.Message(
@@ -49,8 +50,13 @@ def predict():
                 token=token
             )
             response = messaging.send(message)
+            fcm_status = "enviada"
             print("✅ Notificación FCM enviada:", response)
         except Exception as e:
             print("❌ Error al enviar la notificación FCM:", e)
+            fcm_status = "error"
 
-    return jsonify({"prediction": prediction})
+    return jsonify({
+        "prediction": prediction,
+        "notificacion": fcm_status
+    })
