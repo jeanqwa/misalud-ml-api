@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: mi-api-misalud
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: FIREBASE_CREDENTIALS_JSON_B64
+        value: <PEGAR_TU_JSON_EN_BASE64>
